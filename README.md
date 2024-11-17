@@ -1,7 +1,7 @@
 # 🎨 Gutter Color for Sublime Text 4
 This plugin provides gutter colors whenever there's color codes on the code
 lines. I ended up going further up the fork tree since I had some whack behavior
-with the repo I forked this from.
+with the repo I originally forked from.
 
 In addition to going further up the fork tree, I removed all color highlighting
 from the plugin. Due to syntax coloring, I only want extra colors to show up in
@@ -20,4 +20,6 @@ Copyright (C) 2018 German Mendez Bravo (Kronuz). All rights reserved.
 MIT license
 
 This plugin was initially a fork of
+https://github.com/Kronuz/ColorHighlight
+which itself was a fork of
 https://github.com/Monnoroch/ColorHighlighter

@@ -7,13 +7,13 @@ import struct
 import threading
 import colorsys
 from functools import partial
-
+import base64
 import sublime
 import sublime_plugin
 
 from .colors import names_to_hex, xterm_to_hex, xterm8_to_hex, xterm8b_to_hex, xterm8f_to_hex
 all_names_to_hex = dict(names_to_hex, **xterm_to_hex)
-
+# TODO: Think this makes more sense to be triggered from file save / open
 NAME = "GutterColor"
 VERSION = "2024.9.1"
 all_regs = []
@@ -296,7 +296,7 @@ class CacheCleanupListener(sublime_plugin.EventListener):
         sublime.set_timeout_async(self.perform_cleanup, 5000)  # 5-second delay
 
     def perform_cleanup(self, max_age_days=1):
-        cache_dir = base_path = os.path.join(sublime.cache_path(), 'User', '%s.cache' % NAME)
+        cache_dir = base_path = os.path.join(sublime.packages_path(), 'User', '%s.cache' % NAME)
         max_age_seconds = max_age_days * 24 * 60 * 60
         now = time.time()
         for filename in os.listdir(cache_dir):
@@ -318,6 +318,7 @@ def toicon(name, light=True):
     gutter_icon = DEFAULT_GUTTER_ICON
     icon_path = os.path.join(base_path, name + '_' + gutter_icon + '.png')
     if not os.path.exists(icon_path):
+        print("Missing icon for color {}".format(icon_path))
         r = int(name[4:6], 16)
         g = int(name[6:8], 16)
         b = int(name[8:10], 16)
@@ -341,10 +342,14 @@ def toicon(name, light=True):
         data = PNG_RE.sub(lambda m: col_map[m.group(0)], PNG_DATA[gutter_icon])
         compressed = zlib.compress(data)
         idat = b'IDAT' + compressed
-        png += I4(len(compressed)) + idat + I4(zlib.crc32(idat))
+        # Calculate CRC in a separate buffer:
+        crc_buffer = bytearray(idat)
+        crc = zlib.crc32(crc_buffer) & 0xFFFFFFFF
+        png += I4(len(compressed)) + idat + I4(crc)  # Use the calculated CRC
         png += PNG_IEND
         with open(icon_path, 'wb') as fp:
             fp.write(png)
+        print("Created icon for color {}".format(icon_path))
     relative_icon_path = os.path.relpath(icon_path, os.path.dirname(sublime.cache_path()))
     relative_icon_path = relative_icon_path.replace('\\', '/')
     return relative_icon_path
@@ -424,6 +429,7 @@ def erase_highlight_colors(view=None):
         vid = view.id()
         if vid in COLOR_HIGHLIGHTS:
             for name in COLOR_HIGHLIGHTS[vid]:
+                print("erasing", name)
                 view.erase_regions(name)
                 view.erase_regions(name + '_icon')
         COLOR_HIGHLIGHTS[vid] = set()
@@ -803,7 +809,7 @@ def queue_highlight_colors(view, delay=-1, preemptive=False, **kwargs):
 def _callback(view, filename, kwargs):
     kwargs['callback'](view, filename, **kwargs)
 
-queue_dispatcher = background_color_highlight
+
 def background_color_highlight():
     __lock_.acquire()
     try:
@@ -813,6 +819,7 @@ def background_color_highlight():
         __lock_.release()
     for callback in callbacks:
         sublime.set_timeout(callback, 0)
+queue_dispatcher = background_color_highlight
 
 
 def queue_loop():
@@ -906,4 +913,3 @@ __loop_ = True
 __active_color_highlight_thread = threading.Thread(target=queue_loop, name=queue_thread_name)
 __active_color_highlight_thread.__semaphore_ = __semaphore_
 __active_color_highlight_thread.start()
-
